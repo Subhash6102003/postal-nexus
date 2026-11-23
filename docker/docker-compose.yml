@@ -1,0 +1,147 @@
+services:
+  # ==========================================
+  # Database & State Store
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: postal_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mailer_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ../src/db/migrations/001_initial_schema.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d mailer_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: postal_redis
+    restart: unless-stopped
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      - redisdata:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ==========================================
+  # Local SMTP Testing Server (Mailhog)
+  # ==========================================
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: postal_mailhog
+    restart: unless-stopped
+    ports:
+      - "1025:1025" # SMTP port
+      - "8025:8025" # Web UI
+
+  # ==========================================
+  # API Gateway Cluster (Horizontal Scaling)
+  # ==========================================
+  api-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.api
+    restart: unless-stopped
+    deploy:
+      replicas: 2
+    ports:
+      - "3000-3001:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: mailer_db
+      PGUSER: postgres
+      PGPASSWORD: postgrespassword
+      JWT_SECRET: postal-nexus-super-secret-key-32chars!!
+      WEBHOOK_SECRET: postal-webhook-signature-secret-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # ==========================================
+  # Background Email Workers (Horizontal Scaling)
+  # ==========================================
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    restart: unless-stopped
+    deploy:
+      replicas: 3
+    environment:
+      NODE_ENV: production
+      WORKER_CONCURRENCY: 50
+      WORKER_BATCH_SIZE: 100
+      EMAIL_PROVIDER: smtp
+      SMTP_HOST: mailhog
+      SMTP_PORT: 1025
+      SMTP_SECURE: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: mailer_db
+      PGUSER: postgres
+      PGPASSWORD: postgrespassword
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+
+  # ==========================================
+  # Observability: Prometheus & Grafana
+  # ==========================================
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: postal_prometheus
+    restart: unless-stopped
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: postal_grafana
+    restart: unless-stopped
+    ports:
+      - "3005:3000"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafanadata:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+
+volumes:
+  pgdata:
+  redisdata:
+  promdata:
+  grafanadata:

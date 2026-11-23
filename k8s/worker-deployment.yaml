@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailer-worker
+  labels:
+    app: mailer-worker
+spec:
+  replicas: 6
+  selector:
+    matchLabels:
+      app: mailer-worker
+  template:
+    metadata:
+      labels:
+        app: mailer-worker
+    spec:
+      containers:
+        - name: worker
+          image: mailer-service-worker:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: WORKER_CONCURRENCY
+              value: "50"
+            - name: WORKER_BATCH_SIZE
+              value: "100"
+            - name: REDIS_HOST
+              value: "redis-service"
+            - name: PGHOST
+              value: "postgres-service"
+            - name: PGDATABASE
+              value: "mailer_db"
+            - name: PGUSER
+              value: "postgres"
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mailer-secrets
+                  key: pg-password
+            - name: SMTP_HOST
+              value: "smtp-relay.internal"
+            - name: SMTP_PORT
+              value: "587"
+            - name: SMTP_SECURE
+              value: "true"
+            - name: SMTP_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mailer-secrets
+                  key: smtp-user
+            - name: SMTP_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: mailer-secrets
+                  key: smtp-pass
+          resources:
+            requests:
+              cpu: "1000m"
+              memory: "1Gi"
+            limits:
+              cpu: "2500m"
+              memory: "2Gi"

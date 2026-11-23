@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'mailer-api'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['api-gateway:3000']
+        labels:
+          service: 'mailer-api'
+
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['redis:6379']
+        labels:
+          service: 'redis'

@@ -1,0 +1,90 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "title": "Incoming Request Rate (req/sec)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(mailer_http_requests_total[1m])) by (status_code)",
+          "legendFormat": "HTTP {{status_code}}"
+        }
+      ]
+    },
+    {
+      "title": "Queue Depth (Incoming vs DLQ)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        {
+          "expr": "mailer_queue_depth",
+          "legendFormat": "Stream: {{stream}}"
+        }
+      ]
+    },
+    {
+      "title": "Delivery Throughput (Emails/min)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(mailer_emails_processed_total{status=\"SENT\"}[1m])) * 60",
+          "legendFormat": "Emails Dispatched/min"
+        }
+      ]
+    },
+    {
+      "title": "API Request Latency (p50, p95, p99)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(mailer_http_request_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p50 Latency"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(mailer_http_request_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p95 Latency"
+        },
+        {
+          "expr": "histogram_quantile(0.99, sum(rate(mailer_http_request_duration_seconds_bucket[1m])) by (le))",
+          "legendFormat": "p99 Latency"
+        }
+      ]
+    },
+    {
+      "title": "Rate Limit Exceeded Rejections (429)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(mailer_rate_limit_exceeded_total[1m]))",
+          "legendFormat": "Rejections/sec"
+        }
+      ]
+    },
+    {
+      "title": "Circuit Breaker State",
+      "type": "stat",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "targets": [
+        {
+          "expr": "mailer_circuit_breaker_state",
+          "legendFormat": "{{provider}}"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["mailer", "production"],
+  "time": { "from": "now-15m", "to": "now" },
+  "title": "Postal Nexus - Distributed Mailing Service",
+  "uid": "postal-nexus-overview"
+}
